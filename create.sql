@@ -6,8 +6,8 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 create table osoba(
   id_osoba uuid DEFAULT uuid_generate_v4() UNIQUE,
-  imie varchar(30),
-  nazwisko varchar(30),
+  imie varchar(30) NOT NULL,
+  nazwisko varchar(30) NOT NULL,
   haslo text NOT NULL,
   numer_telefonu numeric(9) NOT NULL UNIQUE,
   email varchar(40) NOT NULL UNIQUE,
@@ -93,7 +93,7 @@ CREATE TABLE recepty(
     id_pacjenta uuid REFERENCES osoba(id_osoba), 
     id_lekarza uuid REFERENCES osoba(id_osoba),
     data_wystawienia timestamp DEFAULT now() not null,
-    termin_waznosci timestamp CHECK(data_wystawienia < termin_waznosci),
+    termin_waznosci timestamp CHECK(data_wystawienia < termin_waznosci and data_wystawienia < now()),
     zalecenia varchar(1000)
 );
 
@@ -200,12 +200,61 @@ begin
 	  from
 	          lekarze_specjalizacje
       where id_lekarza != all 
-	  (select id_lekarza from wizyty where d between data_od and data_do or o between data_od and data_do)
-	  and id_specjalizacja in (select id_specjalizacja from specjalizacje where nazwa = s) order by 1 limit 1;
+	  (select id_lekarza from wizyty where d > data_od and d < data_do or o > data_od and o < data_do or
+	  data_od > o and data_od < d and data_do > o and data_do < d or o = data_od or d = data_do)
+	  and id_specjalizacja in (select id_specjalizacja from specjalizacje where nazwa = s)
+	  and id_lekarza in (select id_lekarza from lekarze_dyzur where d between data_od and data_do or o between data_od and data_do) order by 1 limit 1;
 	if exists( select * from wizyty where id_wizyty = id) then
 		return true;
 	end if;
 	return false;
+end;
+$$ language 'plpgsql';
+
+create or replace function dodaj_wizyte(p uuid,s text)
+  returns boolean as $$
+declare
+	id int;
+	start timestamp;
+	stop timestamp;
+	out boolean;
+	row record;
+begin
+  out = false;
+  Select nextval(pg_get_serial_sequence('wizyty', 'id_wizyty')) into id;	
+  
+  for row in select * from lekarze_dyzur 
+  where id_lekarza in (select id_lekarza from lekarze_specjalizacje where id_specjalizacja = (select id_specjalizacja from specjalizacje where nazwa = s)) and data_od > now() loop
+  	start = row.data_od;
+      while start < row.data_do loop
+		stop = start + interval '30 minutes';
+		select wizyta(p,s,start,stop) into out;
+		if out then
+			EXIT;
+		end if;
+		start = start + interval '30 minutes';
+	  end loop;
+	  if out then
+		EXIT;
+	  end if;
+  end loop;
+  return out;
+end;
+$$ language 'plpgsql';
+
+create or replace function uzyj_recepty(id int)
+  returns numeric as $$
+declare
+	out numeric;
+begin
+  if not exists(select * from recepty where id_recepty = id and termin_waznosci > now()) then
+	return -1;
+  end if;
+  select sum(b.ilosc * c.cena) 
+  from recepty a,recepty_lekarstwa b,lekarstwa c 
+  where a.id_recepty = b.id_recepty and b.id_lekarstwa = c.id_lekarstwa and a.id_recepty = id into out;
+  update recepty set termin_waznosci = now() where id_recepty = id;
+  return out;
 end;
 $$ language 'plpgsql';
 ----
@@ -257,9 +306,14 @@ for each row execute procedure poprawnosc_osoba();
 create or replace function poprawnosc_wizyty()
   returns trigger as $$
 begin
+  if exists(select * from lekarze_dyzur where id_lekarza = new.id_pacjenta and 
+  	( new.data_do > data_od and new.data_do < data_do or new.data_od > data_od and new.data_od < data_do or
+	  data_do > new.data_od and data_do < new.data_do or data_od > new.data_od and data_od < new.data_do))then
+	return null;
+  end if;
   if exists(select * from wizyty where id_lekarza = new.id_lekarza and
-	  ( new.data_do between data_od and data_do or new.data_od between data_od and data_do or
-	  data_do between new.data_od and new.data_do or data_od between new.data_od and new.data_do) ) then
+	  ( new.data_do > data_od and new.data_do < data_do or new.data_od > data_od and new.data_od < data_do or
+	  data_do > new.data_od and data_do < new.data_do or data_od > new.data_od and data_od < new.data_do)) then
 	  return null;
   end if;
   if not exists(select * from lekarze_dyzur where id_lekarza = new.id_lekarza and

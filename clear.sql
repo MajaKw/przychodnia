@@ -29,6 +29,8 @@ Drop function login_pacjent CASCADE;
 Drop function login_lekarz CASCADE;
 Drop function wizyta CASCADE;
 Drop function poprawnosc_urlop CASCADE;
+Drop function dodaj_wizyte CASCADE;
+Drop function uzyj_recepty CASCADE;
 
 Drop view pacjenci CASCADE;
 Drop view lekarze CASCADE;

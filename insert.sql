@@ -53,6 +53,17 @@ insert into lekarze_dyzur select id_osoba as id_lekarza,'2022-05-08 08:00:00' as
 insert into lekarze_dyzur select id_osoba as id_lekarza,'2022-05-09 08:00:00' as data_od,'2022-05-09 16:00:00' as data_do from lekarze order by random() limit 20;
 insert into lekarze_dyzur select id_osoba as id_lekarza,'2022-05-10 08:00:00' as data_od,'2022-05-10 16:00:00' as data_do from lekarze order by random() limit 20;
 
+insert into lekarze_dyzur select id_osoba as id_lekarza,'2022-06-10 08:00:00' as data_od,'2022-06-10 16:00:00' as data_do from lekarze order by random() limit 20;
+insert into lekarze_dyzur select id_osoba as id_lekarza,'2022-06-11 08:00:00' as data_od,'2022-06-11 16:00:00' as data_do from lekarze order by random() limit 20;
+insert into lekarze_dyzur select id_osoba as id_lekarza,'2022-06-12 08:00:00' as data_od,'2022-06-12 16:00:00' as data_do from lekarze order by random() limit 20;
+insert into lekarze_dyzur select id_osoba as id_lekarza,'2022-06-13 08:00:00' as data_od,'2022-06-13 16:00:00' as data_do from lekarze order by random() limit 20;
+insert into lekarze_dyzur select id_osoba as id_lekarza,'2022-06-14 08:00:00' as data_od,'2022-06-14 16:00:00' as data_do from lekarze order by random() limit 20;
+insert into lekarze_dyzur select id_osoba as id_lekarza,'2022-06-15 08:00:00' as data_od,'2022-06-15 16:00:00' as data_do from lekarze order by random() limit 20;
+insert into lekarze_dyzur select id_osoba as id_lekarza,'2022-06-16 08:00:00' as data_od,'2022-06-16 16:00:00' as data_do from lekarze order by random() limit 20;
+insert into lekarze_dyzur select id_osoba as id_lekarza,'2022-06-17 08:00:00' as data_od,'2022-06-17 16:00:00' as data_do from lekarze order by random() limit 20;
+insert into lekarze_dyzur select id_osoba as id_lekarza,'2022-06-18 08:00:00' as data_od,'2022-06-18 16:00:00' as data_do from lekarze order by random() limit 20;
+insert into lekarze_dyzur select id_osoba as id_lekarza,'2022-06-19 08:00:00' as data_od,'2022-06-19 16:00:00' as data_do from lekarze order by random() limit 20;
+
 select wizyta((select id_osoba from pacjenci where pesel = '97120215878'),(select nazwa from specjalizacje order by random() limit 1),'2022-05-01 08:30:00','2022-05-01 09:00:00');
 
 create or replace function insert_wizyty()
@@ -71,3 +82,6 @@ $$ language 'plpgsql';
 
 select insert_wizyty();
 drop function insert_wizyty;
+
+insert into recepty select nextval(pg_get_serial_sequence('recepty', 'id_recepty')) as id_recepty,id_wizyty,id_pacjenta,id_lekarza,data_od as data_wystawienia,data_od + interval '7 day' as termin_waznosci from wizyty order by random() limit 100;
+insert into recepty_lekarstwa select a.id_recepty,b.id_lekarstwa,round(random()::numeric*10 + 1,0) from recepty a,lekarstwa b order by random() limit 500;
