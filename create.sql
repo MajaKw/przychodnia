@@ -12,7 +12,7 @@ create table osoba(
   numer_telefonu numeric(9) NOT NULL UNIQUE,
   email varchar(40) NOT NULL UNIQUE,
   adres_zamieszkania varchar(40),
-  pesel text NOT NULL UNIQUE
+  pesel char(11) NOT NULL UNIQUE
 );
 
 create table uprawnienia(
@@ -99,7 +99,7 @@ CREATE TABLE recepty(
 
 CREATE TABLE lekarstwa(
     id_lekarstwa serial PRIMARY KEY,
-    nazwa varchar(30),
+    nazwa varchar(30) UNIQUE,
     cena numeric(6,2)
 );
 
@@ -122,8 +122,9 @@ CREATE TABLE recepty_lekarstwa(
 
 CREATE TABLE skierowania(
     id_skierowania serial PRIMARY KEY,
+	id_specjalizacja int references specjalizacje(id_specjalizacja),
     opis varchar(100),
-	wykorzystane boolean default true not null
+	wykorzystane boolean default false not null
 );
 
 CREATE TABLE skierowania_pacjenci(
@@ -183,6 +184,28 @@ declare
 begin
   select id_osoba from lekarze where pesel = p and haslo = md5(h) into out;
   return out;
+end;
+$$ language 'plpgsql';
+
+create or replace function wizyta(p uuid,s text,o timestamp,d timestamp)
+  returns boolean as $$
+declare
+	id int;
+begin
+  Select nextval(pg_get_serial_sequence('wizyty', 'id_wizyty')) into id;	
+
+  insert into wizyty
+	  select
+	          id,p,id_lekarza,o,d
+	  from
+	          lekarze_specjalizacje
+      where id_lekarza != all 
+	  (select id_lekarza from wizyty where d between data_od and data_do or o between data_od and data_do)
+	  and id_specjalizacja in (select id_specjalizacja from specjalizacje where nazwa = s) order by 1 limit 1;
+	if exists( select * from wizyty where id_wizyty = id) then
+		return true;
+	end if;
+	return false;
 end;
 $$ language 'plpgsql';
 ----
@@ -266,7 +289,8 @@ begin
 	  return null;
   end if;
   if exists(select * from urlop where id_lekarza = new.id_lekarza and
-	  ( new.data_do between data_od and data_do or new.data_od between data_od and data_do) ) then
+	  ( new.data_do between data_od and data_do or new.data_od between data_od and data_do or
+	  data_do between new.data_od and new.data_do or data_od between new.data_od and new.data_do ) ) then
 	  return null;
   end if;
   if old is not null then
@@ -278,6 +302,27 @@ $$ language 'plpgsql';
 
 create trigger a before insert or update on lekarze_dyzur
 for each row execute procedure poprawnosc_dyzur();
+
+----
+create or replace function poprawnosc_urlop()
+  returns trigger as $$
+begin
+  if exists(select * from lekarze_dyzur where id_lekarza = new.id_lekarza and
+	  ( new.data_do between data_od and data_do or new.data_od between data_od and data_do or
+	  data_do between new.data_od and new.data_do or data_od between new.data_od and new.data_do ) ) then
+	  return null;
+  end if;
+  if exists(select * from urlop where id_lekarza = new.id_lekarza and
+	  ( new.data_do between data_od and data_do or new.data_od between data_od and data_do or
+	  data_do between new.data_od and new.data_do or data_od between new.data_od and new.data_do ) ) then
+	  return null;
+  end if;
+  return new;
+end
+$$ language 'plpgsql';
+
+create trigger a before insert or update on urlop
+for each row execute procedure poprawnosc_urlop();
 
 ----
 create or replace function czy_istnieje_pacjent()
@@ -364,3 +409,9 @@ insert into pacjenci values(null,'Patryk','Bar','1234','123456783','a6@student.u
 insert into pacjenci values(null,'Patryk','Bar','1234','123456782','a7@student.uj.edu.pl',null,'90030352279');
 insert into pacjenci values(null,'Patryk','Bar','1234','123456781','a8@student.uj.edu.pl',null,'84061596546');
 insert into pacjenci values(null,'Patryk','Bar','1234','123456780','a9@student.uj.edu.pl',null,'68062155117');
+
+insert into lekarze values(null,'Jan','Kowalski','1234','123456770','a11@student.uj.edu.pl',null,'67082727575','Alergologia');
+insert into lekarze values(null,'Jan','Kowalski','1234','123456771','a21@student.uj.edu.pl',null,'61060985245','Alergologia');
+insert into lekarze values(null,'Jan','Kowalski','1234','123456772','a31@student.uj.edu.pl',null,'76031324763','Alergologia');
+insert into lekarze values(null,'Jan','Kowalski','1234','123456773','a41@student.uj.edu.pl',null,'87010132796','Alergologia');
+insert into lekarze values(null,'Jan','Kowalski','1234','123456774','a51@student.uj.edu.pl',null,'87101814884','Alergologia');

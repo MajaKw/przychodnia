@@ -5,6 +5,7 @@ DROP RULE recepcionisci ON recepcionisci CASCADE;
 DROP TRIGGER a ON osoba CASCADE;
 DROP TRIGGER a ON wizyty CASCADE;
 DROP TRIGGER a ON lekarze_dyzur CASCADE;
+DROP TRIGGER a ON urlop CASCADE;
 
 DROP TRIGGER pacjent ON wizyty CASCADE;
 DROP TRIGGER pacjent ON dokumentacja CASCADE;
@@ -25,6 +26,9 @@ Drop function poprawnosc_wizyty CASCADE;
 Drop function poprawnosc_dyzur CASCADE;
 Drop function id_osoba CASCADE;
 Drop function login_pacjent CASCADE;
+Drop function login_lekarz CASCADE;
+Drop function wizyta CASCADE;
+Drop function poprawnosc_urlop CASCADE;
 
 Drop view pacjenci CASCADE;
 Drop view lekarze CASCADE;
