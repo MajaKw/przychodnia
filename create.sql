@@ -6,13 +6,14 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 create table osoba(
   id_osoba uuid DEFAULT uuid_generate_v4() UNIQUE,
+  login varchar(30) NOT NULL UNIQUE,
   imie varchar(30) NOT NULL,
   nazwisko varchar(30) NOT NULL,
   haslo text NOT NULL,
   numer_telefonu numeric(9) NOT NULL UNIQUE,
   email varchar(40) NOT NULL UNIQUE,
   adres_zamieszkania varchar(40),
-  pesel char(11) NOT NULL UNIQUE
+  pesel char(11)
 );
 
 create table uprawnienia(
@@ -147,7 +148,7 @@ select a.* from osoba a,osoby_uprawnienia b,uprawnienia c
 where a.id_osoba = b.id_osoby and b.id_uprawnienia = c.id_uprawnienia and c.nazwa = 'Pacjent';
 
 CREATE OR REPLACE view lekarze as
-select id_osoba,imie,nazwisko,haslo,numer_telefonu,email,adres_zamieszkania,pesel,g.nazwa as specjalizacja 
+select id_osoba,login,imie,nazwisko,haslo,numer_telefonu,email,adres_zamieszkania,pesel,g.nazwa as specjalizacja 
 from ((select a.* from osoba a,osoby_uprawnienia b,uprawnienia c
 where a.id_osoba = b.id_osoby and b.id_uprawnienia = c.id_uprawnienia and c.nazwa = 'Lekarz') d
 left join lekarze_specjalizacje e on d.id_osoba = e.id_lekarza) f
@@ -175,7 +176,7 @@ create or replace function login_pacjent(p text,h text)
 declare
   out uuid;
 begin
-  select id_osoba from pacjenci where pesel = p and haslo = md5(h) into out;
+  select id_osoba from pacjenci where login = p and haslo = md5(h) into out;
   return out;
 end;
 $$ language 'plpgsql';
@@ -185,7 +186,7 @@ create or replace function login_lekarz(p text,h text)
 declare
   out uuid;
 begin
-  select id_osoba from lekarze where pesel = p and haslo = md5(h) into out;
+  select id_osoba from lekarze where login = p and haslo = md5(h) into out;
   return out;
 end;
 $$ language 'plpgsql';
@@ -347,6 +348,15 @@ declare
 begin
   suma = 0;
   j = 1;
+  if old is not null then
+	new.id_osoba = old.id_osoba;
+  end if;
+  new.haslo = md5(new.haslo);
+  
+  if new.pesel is null then
+	return new;
+  end if;
+
   if length(new.pesel) != 11 then
           raise notice 'Niepoprawny PESEL';
   end if;
@@ -368,11 +378,6 @@ begin
   if suma != substring(new.pesel from 11 for 1)::integer then
           raise notice 'Niepoprawny PESEL';
   end if;
-  
-  if old is not null then
-	new.id_osoba = old.id_osoba;
-  end if;
-  new.haslo = md5(new.haslo);
   return new;
 end
 $$ language 'plpgsql';
@@ -526,38 +531,38 @@ for each row execute procedure czy_istnieje_lekarz();
 
 CREATE OR REPLACE RULE pacjenci AS ON INSERT TO pacjenci
 DO INSTEAD(
-  insert into osoba (imie,nazwisko,haslo,numer_telefonu,email,adres_zamieszkania,pesel) values(new.imie,new.nazwisko,new.haslo,new.numer_telefonu,new.email,new.adres_zamieszkania,new.pesel);
+  insert into osoba (imie,login,nazwisko,haslo,numer_telefonu,email,adres_zamieszkania,pesel) values(new.imie,new.login,new.nazwisko,new.haslo,new.numer_telefonu,new.email,new.adres_zamieszkania,new.pesel);
   insert into osoby_uprawnienia values(id_osoba(new.pesel),1);
 );
 
 CREATE OR REPLACE RULE lekarze AS ON INSERT TO lekarze
 DO INSTEAD(
-  insert into osoba (imie,nazwisko,haslo,numer_telefonu,email,adres_zamieszkania,pesel) values(new.imie,new.nazwisko,new.haslo,new.numer_telefonu,new.email,new.adres_zamieszkania,new.pesel);
+  insert into osoba (imie,login,nazwisko,haslo,numer_telefonu,email,adres_zamieszkania,pesel) values(new.imie,new.login,new.nazwisko,new.haslo,new.numer_telefonu,new.email,new.adres_zamieszkania,new.pesel);
   insert into osoby_uprawnienia values(id_osoba(new.pesel),2);
   insert into lekarze_specjalizacje select id_osoba(new.pesel),id_specjalizacja from specjalizacje where nazwa = new.specjalizacja;
 );
 
 CREATE OR REPLACE RULE recepcionisci AS ON INSERT TO recepcionisci
 DO INSTEAD(
-  insert into osoba (imie,nazwisko,haslo,numer_telefonu,email,adres_zamieszkania,pesel) values(new.imie,new.nazwisko,new.haslo,new.numer_telefonu,new.email,new.adres_zamieszkania,new.pesel);
+  insert into osoba (imie,login,nazwisko,haslo,numer_telefonu,email,adres_zamieszkania,pesel) values(new.imie,new.login,new.nazwisko,new.haslo,new.numer_telefonu,new.email,new.adres_zamieszkania,new.pesel);
   insert into osoby_uprawnienia values(id_osoba(new.pesel),3);
 );
 ----
 --insert
 
-insert into pacjenci values(null,'Patryk','Bar','1234','123456789','patryk.bar@student.uj.edu.pl',null,'97120215878');
-insert into pacjenci values(null,'Patryk','Bar','1234','123456788','a1@student.uj.edu.pl',null,'59091626567');
-insert into pacjenci values(null,'Patryk','Bar','1234','123456787','a2@student.uj.edu.pl',null,'72091084126');
-insert into pacjenci values(null,'Patryk','Bar','1234','123456786','a3@student.uj.edu.pl',null,'78031832329');
-insert into pacjenci values(null,'Patryk','Bar','1234','123456785','a4@student.uj.edu.pl',null,'78021773713');
-insert into pacjenci values(null,'Patryk','Bar','1234','123456784','a5@student.uj.edu.pl',null,'04260499196');
-insert into pacjenci values(null,'Patryk','Bar','1234','123456783','a6@student.uj.edu.pl',null,'74012638887');
-insert into pacjenci values(null,'Patryk','Bar','1234','123456782','a7@student.uj.edu.pl',null,'90030352279');
-insert into pacjenci values(null,'Patryk','Bar','1234','123456781','a8@student.uj.edu.pl',null,'84061596546');
-insert into pacjenci values(null,'Patryk','Bar','1234','123456780','a9@student.uj.edu.pl',null,'68062155117');
+insert into pacjenci values(null,'user1','Patryk','Bar','1234','123456789','patryk.bar@student.uj.edu.pl',null,'97120215878');
+insert into pacjenci values(null,'user2','Patryk','Bar','1234','123456788','a1@student.uj.edu.pl',null,'59091626567');
+insert into pacjenci values(null,'user3','Patryk','Bar','1234','123456787','a2@student.uj.edu.pl',null,'72091084126');
+insert into pacjenci values(null,'user4','Patryk','Bar','1234','123456786','a3@student.uj.edu.pl',null,'78031832329');
+insert into pacjenci values(null,'user5','Patryk','Bar','1234','123456785','a4@student.uj.edu.pl',null,'78021773713');
+insert into pacjenci values(null,'user6','Patryk','Bar','1234','123456784','a5@student.uj.edu.pl',null,'04260499196');
+insert into pacjenci values(null,'user7','Patryk','Bar','1234','123456783','a6@student.uj.edu.pl',null,'74012638887');
+insert into pacjenci values(null,'user8','Patryk','Bar','1234','123456782','a7@student.uj.edu.pl',null,'90030352279');
+insert into pacjenci values(null,'user9','Patryk','Bar','1234','123456781','a8@student.uj.edu.pl',null,'84061596546');
+insert into pacjenci values(null,'user10','Patryk','Bar','1234','123456780','a9@student.uj.edu.pl',null,'68062155117');
 
-insert into lekarze values(null,'Jan','Kowalski','1234','123456770','a11@student.uj.edu.pl',null,'67082727575','Alergologia');
-insert into lekarze values(null,'Jan','Kowalski','1234','123456771','a21@student.uj.edu.pl',null,'61060985245','Alergologia');
-insert into lekarze values(null,'Jan','Kowalski','1234','123456772','a31@student.uj.edu.pl',null,'76031324763','Alergologia');
-insert into lekarze values(null,'Jan','Kowalski','1234','123456773','a41@student.uj.edu.pl',null,'87010132796','Alergologia');
-insert into lekarze values(null,'Jan','Kowalski','1234','123456774','a51@student.uj.edu.pl',null,'87101814884','Alergologia');
+insert into lekarze values(null,'user11','Jan','Kowalski','1234','123456770','a11@student.uj.edu.pl',null,'67082727575','Alergologia');
+insert into lekarze values(null,'user12','Jan','Kowalski','1234','123456771','a21@student.uj.edu.pl',null,'61060985245','Alergologia');
+insert into lekarze values(null,'user13','Jan','Kowalski','1234','123456772','a31@student.uj.edu.pl',null,'76031324763','Alergologia');
+insert into lekarze values(null,'user14','Jan','Kowalski','1234','123456773','a41@student.uj.edu.pl',null,'87010132796','Alergologia');
+insert into lekarze values(null,'user15','Jan','Kowalski','1234','123456774','a51@student.uj.edu.pl',null,'87101814884','Alergologia');

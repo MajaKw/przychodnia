@@ -6,7 +6,8 @@ insert into pesele select unnest(array['89031742321','73072147746','95101464299'
 
 insert into pacjenci 
 select          
-	null,             
+	null,
+	random()::text,    
     left(md5(random()::text),10),
     left(md5(random()::text),10),
 	'1234',
@@ -21,7 +22,8 @@ insert into pesele select unnest(array['89110192821','58052739926','70012651123'
 
 insert into lekarze 
 select          
-	null,             
+	null,
+	random()::text,
     left(md5(random()::text),10),
     left(md5(random()::text),10),
 	'1234',
