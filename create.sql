@@ -57,7 +57,8 @@ insert into specjalizacje values(16,'Urologia','');
 
 create table lekarze_specjalizacje(
   id_lekarza uuid references osoba(id_osoba),
-  id_specjalizacja int references specjalizacje(id_specjalizacja)
+  id_specjalizacja int references specjalizacje(id_specjalizacja),
+  UNIQUE (id_lekarza,id_specjalizacja)
 );
 ----
 
@@ -67,7 +68,7 @@ create table lekarze_dyzur(
   data_do timestamp CHECK(data_od < data_do) not null
 );
 
-create table urlop(
+create table nieobecnosci(
   id_lekarza uuid references osoba(id_osoba),
   data_od timestamp not null,
   data_do timestamp CHECK(data_od < data_do) not null
@@ -78,12 +79,12 @@ CREATE TABLE wizyty(
     id_pacjenta uuid REFERENCES osoba(id_osoba),
     id_lekarza uuid REFERENCES osoba(id_osoba),
     data_od timestamp not null,
-    data_do timestamp CHECK(data_od < data_do) not null,
-    diagnoza varchar(1000)
+    data_do timestamp CHECK(data_od < data_do) not null
 );
 
 CREATE TABLE dokumentacja(
     id_pacjenta uuid REFERENCES osoba(id_osoba),
+	data_wystawienia timestamp not null,
     plik text not null
 );
 
@@ -93,7 +94,7 @@ CREATE TABLE recepty(
     id_pacjenta uuid REFERENCES osoba(id_osoba), 
     id_lekarza uuid REFERENCES osoba(id_osoba),
     data_wystawienia timestamp DEFAULT now() not null,
-    termin_waznosci timestamp CHECK(data_wystawienia < termin_waznosci and data_wystawienia < now()),
+    termin_waznosci timestamp CHECK(data_wystawienia < termin_waznosci),
     zalecenia varchar(1000)
 );
 
@@ -117,23 +118,25 @@ insert into lekarstwa (nazwa,cena) values('lekarstwo10',round(random()::numeric*
 CREATE TABLE recepty_lekarstwa(
     id_recepty serial REFERENCES recepty(id_recepty),
     id_lekarstwa serial REFERENCES lekarstwa(id_lekarstwa),
-    ilosc numeric(2)
+    ilosc numeric(2),
+	UNIQUE (id_recepty,id_lekarstwa)
 );
 
 CREATE TABLE skierowania(
     id_skierowania serial PRIMARY KEY,
-	id_specjalizacja int references specjalizacje(id_specjalizacja),
-    opis varchar(100),
-	wykorzystane boolean default false not null
-);
-
-CREATE TABLE skierowania_pacjenci(
-    id_skierowania serial REFERENCES skierowania(id_skierowania),
     id_pacjenta uuid REFERENCES osoba(id_osoba),
     id_lekarza uuid REFERENCES osoba(id_osoba),
-	id_wizyty int,
     data_wystawienia timestamp not null,
-    termin_waznosci timestamp CHECK(termin_waznosci > data_wystawienia)
+    termin_waznosci timestamp CHECK(termin_waznosci > data_wystawienia and termin_waznosci >= now()),
+	id_specjalizacja int references specjalizacje(id_specjalizacja),
+    opis varchar(100)
+);
+
+CREATE TABLE terminy_wizyt(
+	id_lekarza uuid REFERENCES osoba(id_osoba),
+	termin_od timestamp,
+	termin_do timestamp,
+	wolny_termin char(3) CHECK (wolny_termin IN('TAK', 'NIE'))
 );
 
 ----
@@ -257,6 +260,82 @@ begin
   return out;
 end;
 $$ language 'plpgsql';
+
+create or replace function uzyj_skierowania(id int)
+  returns boolean as $$
+declare
+	out boolean;
+	osoba uuid;
+	s int;
+	specjalizacja varchar(30);
+begin
+  if not exists(select * from skierowania where id_skierowania = id and termin_waznosci >= now()) then
+	return false;
+  end if;
+  select id_pacjenta from skierowania where id_skierowania = id into osoba;
+  select id_specjalizacja from skierowania where id_skierowania = id into s;
+  select nazwa from specjalizacje where id_specjalizacja = s into specjalizacja;
+  select dodaj_wizyte(osoba,specjalizacja) into out;
+  update skierowania set termin_waznosci = now() where id_skierowania = id;
+  return out;
+end;
+$$ language 'plpgsql';
+
+DROP FUNCTION IF EXISTS szukaj_wizyt;
+CREATE OR REPLACE FUNCTION  szukaj_wizyt(specj varchar(30), miesiac char(2))
+RETURNS TABLE(lekarz_imie varchar(30), lekarz_nazwisko varchar(30), data varchar(30))
+AS $$
+DECLARE
+year char(4);
+my_date timestamp;
+rec record;
+BEGIN
+SELECT to_char(CURRENT_DATE, 'YYYY') INTO year;
+        IF(SELECT to_char(CURRENT_DATE, 'MM') > miesiac)
+        THEN SELECT to_char(date_trunc('year', CURRENT_DATE) + interval '1 year', 'YYYY') INTO year; END IF;
+my_date = CONCAT(year, '-', miesiac, '-', to_char(CURRENT_DATE, 'DD'))::timestamp;
+
+        FOR rec IN 
+        (SELECT DISTINCT l.imie, l.nazwisko, to_char(termin_od, 'YYYY-MM-DD') as data
+        FROM lekarze l
+        JOIN lekarze_specjalizacje s ON l.id_osoba = s.id_lekarza
+        JOIN terminy_wizyt USING(id_lekarza)
+        WHERE s.id_specjalizacja = 
+                (SELECT id_specjalizacja FROM specjalizacje
+                WHERE nazwa = specj AND termin_od > CURRENT_DATE AND termin_od > my_date 
+                AND termin_od < (date_trunc('month', my_date) + interval '1 month')::timestamp
+        AND wolny_termin = 'TAK'))
+LOOP
+lekarz_imie = rec.imie;
+lekarz_nazwisko = rec.nazwisko;
+data = rec.data;
+RETURN NEXT;
+END LOOP;
+
+END;
+$$ LANGUAGE 'plpgsql';
+
+DROP FUNCTION IF EXISTS umow_wizyte;
+CREATE OR REPLACE FUNCTION umow_wizyte(id_wizyta int)
+RETURNS void AS
+$$
+BEGIN
+	UPDATE terminy_wizyt
+	SET wolny_termin = 'NIE'
+	WHERE id_wizyty = id_wizyta;
+END;
+$$ LANGUAGE 'plpgsql';
+
+DROP FUNCTION IF EXISTS anuluj_wizyte;
+CREATE OR REPLACE FUNCTION anuluj_wizyte(id_wizyta int)
+RETURNS void AS
+$$
+BEGIN
+	UPDATE terminy_wizyt
+	SET wolny_termin = 'TAK'
+	WHERE id_wizyty = id_wizyta;
+END;
+$$ LANGUAGE 'plpgsql';
 ----
 --trigger
 
@@ -301,6 +380,25 @@ $$ language 'plpgsql';
 create trigger a before insert or update on osoba
 for each row execute procedure poprawnosc_osoba();
 
+CREATE OR REPLACE FUNCTION wizyta_after_dyzur()
+RETURNS TRIGGER AS
+$$
+DECLARE
+start timestamp;
+
+BEGIN
+	start = new.data_od;
+	LOOP
+	INSERT INTO terminy_wizyt VALUES(new.id_lekarza,start, start + interval'30 minutes', 'TAK');
+	start = start + interval '30 minutes';
+	IF(start >= new.data_do) THEN RETURN new; END IF;
+	END LOOP;
+END;
+$$ LANGUAGE 'plpgsql';
+
+CREATE TRIGGER przydziel_wizyty_z_dyzurow AFTER INSERT ON lekarze_dyzur
+	FOR EACH ROW EXECUTE FUNCTION wizyta_after_dyzur();
+
 ----
 
 create or replace function poprawnosc_wizyty()
@@ -342,7 +440,7 @@ begin
 	  data_do between new.data_od and new.data_do or data_od between new.data_od and new.data_do ) ) then
 	  return null;
   end if;
-  if exists(select * from urlop where id_lekarza = new.id_lekarza and
+  if exists(select * from nieobecnosci where id_lekarza = new.id_lekarza and
 	  ( new.data_do between data_od and data_do or new.data_od between data_od and data_do or
 	  data_do between new.data_od and new.data_do or data_od between new.data_od and new.data_do ) ) then
 	  return null;
@@ -358,7 +456,7 @@ create trigger a before insert or update on lekarze_dyzur
 for each row execute procedure poprawnosc_dyzur();
 
 ----
-create or replace function poprawnosc_urlop()
+create or replace function poprawnosc_nieobecnosci()
   returns trigger as $$
 begin
   if exists(select * from lekarze_dyzur where id_lekarza = new.id_lekarza and
@@ -366,7 +464,7 @@ begin
 	  data_do between new.data_od and new.data_do or data_od between new.data_od and new.data_do ) ) then
 	  return null;
   end if;
-  if exists(select * from urlop where id_lekarza = new.id_lekarza and
+  if exists(select * from nieobecnosci where id_lekarza = new.id_lekarza and
 	  ( new.data_do between data_od and data_do or new.data_od between data_od and data_do or
 	  data_do between new.data_od and new.data_do or data_od between new.data_od and new.data_do ) ) then
 	  return null;
@@ -375,8 +473,8 @@ begin
 end
 $$ language 'plpgsql';
 
-create trigger a before insert or update on urlop
-for each row execute procedure poprawnosc_urlop();
+create trigger a before insert or update on nieobecnosci
+for each row execute procedure poprawnosc_nieobecnosci();
 
 ----
 create or replace function czy_istnieje_pacjent()
@@ -398,9 +496,6 @@ for each row execute procedure czy_istnieje_pacjent();
 create trigger pacjent before insert or update on recepty
 for each row execute procedure czy_istnieje_pacjent();
 
-create trigger pacjent before insert or update on skierowania_pacjenci
-for each row execute procedure czy_istnieje_pacjent();
-
 create or replace function czy_istnieje_lekarz()
   returns trigger as $$
 begin
@@ -417,16 +512,13 @@ for each row execute procedure czy_istnieje_lekarz();
 create trigger lekarz before insert or update on lekarze_dyzur
 for each row execute procedure czy_istnieje_lekarz();
 
-create trigger lekarz before insert or update on urlop
+create trigger lekarz before insert or update on nieobecnosci
 for each row execute procedure czy_istnieje_lekarz();
 
 create trigger lekarz before insert or update on wizyty
 for each row execute procedure czy_istnieje_lekarz();
 
 create trigger lekarz before insert or update on recepty
-for each row execute procedure czy_istnieje_lekarz();
-
-create trigger lekarz before insert or update on skierowania_pacjenci
 for each row execute procedure czy_istnieje_lekarz();
 
 ----

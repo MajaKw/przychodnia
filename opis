@@ -1,0 +1,31 @@
+Widoki
+pacjenci - wyświetla wszystkie osobay z uprawnieniem pacjenta
+lekarze - wyświetla wszystkie osobay z uprawnieniem lekarza
+recepcionisci - wyświetla wszystkie osobay z uprawnieniem recepcjonisty
+Funkcje
+id_osoba - przyjmuje pesel i zwraca id osoby o danym peselu
+login_pacjent - przyjmuje pesel oraz hasło i zwracza 
+czy pacjent może się zalogować
+login_lekarz - przyjmuje pesel oraz hasło i zwracza
+czy lekarz może się zalogować
+wizyta - przyjmuje id pacjenta,specjalizacje,date od,date do
+umawia pacjenta do specjalisty w danym terminie zwraca czy się udało
+dodaj_wizyte - przyjmuje id pacjenta,specjalizacje
+umawia pacjenta do specjalisty na najbliższy wolny termin zwraca czy się udało
+uzyj_recepty - wykupuje recepte zwraca cene wszystkich lekarstw z recemty
+uzyj_skierowania - wykożystuje skierowanie i umawia na wizyte
+Trigger
+poprawnosc_osoba - sprawdza przed dodaniem czy osoba ma poprawny pesel i id 
+oraz haszuje hasło
+poprawnosc_wizyty - sprawdza przed dodaniem czy wizyty się nie nachodzą,
+czy lekarz przyjmuje oraz czy lekarz który chce się umówić na wizytę nie jest
+przypadkiem na dyżurze 
+poprawnosc_dyzur - sprawdza przed dodaniem czy dyżury się nie nachodzą oraz
+czy lekaż nie zadeklarował nieobecności
+poprawnosc_nieobecnosci - sprawdza przed dodaniem czy nieobecności się nie nachodzą
+czy_istnieje_pacjent - jeśli pacjent nie istnieje nie pozwala dodać rekordu
+czy_istnieje_lekarz - jeśli lekarz nie istnieje nie pozwala dodać rekordu 
+Zasady
+pacjenci - pozwala zrobić insert na widoku pacjenci
+lekarze - pozwala zrobić insert na widoku lekarze
+recepcionisci - pozwala zrobić insert na widoku recepcionisci

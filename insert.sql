@@ -36,11 +36,11 @@ on a.number = b.number;
 
 drop table pesele;
 
-insert into urlop select id_osoba as id_lekarza,'2022-05-01' as data_od,'2022-05-03' as data_do from lekarze order by random() limit 1;
-insert into urlop select id_osoba as id_lekarza,'2022-05-03' as data_od,'2022-05-05' as data_do from lekarze order by random() limit 1;
-insert into urlop select id_osoba as id_lekarza,'2022-05-05' as data_od,'2022-05-07' as data_do from lekarze order by random() limit 1;
-insert into urlop select id_osoba as id_lekarza,'2022-05-07' as data_od,'2022-05-09' as data_do from lekarze order by random() limit 1;
-insert into urlop select id_osoba as id_lekarza,'2022-05-09' as data_od,'2022-05-10' as data_do from lekarze order by random() limit 1;
+insert into nieobecnosci select id_osoba as id_lekarza,'2022-05-01' as data_od,'2022-05-03' as data_do from lekarze order by random() limit 1;
+insert into nieobecnosci select id_osoba as id_lekarza,'2022-05-03' as data_od,'2022-05-05' as data_do from lekarze order by random() limit 1;
+insert into nieobecnosci select id_osoba as id_lekarza,'2022-05-05' as data_od,'2022-05-07' as data_do from lekarze order by random() limit 1;
+insert into nieobecnosci select id_osoba as id_lekarza,'2022-05-07' as data_od,'2022-05-09' as data_do from lekarze order by random() limit 1;
+insert into nieobecnosci select id_osoba as id_lekarza,'2022-05-09' as data_od,'2022-05-10' as data_do from lekarze order by random() limit 1;
 
 insert into lekarze_dyzur select id_osoba as id_lekarza,'2022-05-01 08:00:00' as data_od,'2022-05-01 16:00:00' as data_do from lekarze order by random() limit 20;
 insert into lekarze_dyzur select id_osoba as id_lekarza,'2022-05-02 08:00:00' as data_od,'2022-05-02 16:00:00' as data_do from lekarze order by random() limit 20;
@@ -83,5 +83,6 @@ $$ language 'plpgsql';
 select insert_wizyty();
 drop function insert_wizyty;
 
-insert into recepty select nextval(pg_get_serial_sequence('recepty', 'id_recepty')) as id_recepty,id_wizyty,id_pacjenta,id_lekarza,data_od as data_wystawienia,data_od + interval '7 day' as termin_waznosci from wizyty order by random() limit 100;
+insert into recepty select nextval(pg_get_serial_sequence('recepty', 'id_recepty')) as id_recepty,id_wizyty,id_pacjenta,id_lekarza,data_od as data_wystawienia,data_od + interval '30 day' as termin_waznosci from wizyty order by random() limit 100;
 insert into recepty_lekarstwa select a.id_recepty,b.id_lekarstwa,round(random()::numeric*10 + 1,0) from recepty a,lekarstwa b order by random() limit 500;
+insert into skierowania select nextval(pg_get_serial_sequence('skierowania', 'id_skierowania')) as id_skierowania,b.id_pacjenta,b.id_lekarza,now() as data_wystawienia,now() + interval '30 day' as termin_waznosci  ,a.id_specjalizacja,'' as opis from lekarze_specjalizacje a,wizyty b order by random() limit 100;
